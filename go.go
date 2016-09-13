@@ -5,6 +5,7 @@ import (
    "os"
    "bufio"
    "time"
+   "strings"
 )
 //
 type strset map[string]bool
@@ -53,6 +54,7 @@ func main() {
    //
    file, err := os.Open("puzzles.txt")
    if err != nil {
+      fmt.Println("main")
       panic(err)
    }
    var lines []string
@@ -61,6 +63,7 @@ func main() {
       lines = append(lines, scanner.Text())
    }
    if scanner.Err() != nil {
+      fmt.Println("main")
       panic(scanner.Err())
    }
    //
@@ -68,7 +71,7 @@ func main() {
    for i,puz := range(lines) {
       fmt.Printf("Puzzle number: %d\n", i)
       fmt.Printf("Puzzle: %v\n", puz)
-      display(solve(puz, squares))
+      display(solve(puz, squares, peers, units), squares)
    }
    toc := time.Now()
    fmt.Printf("\n\nRuntime: %d seconds", toc.Sub(tic))
@@ -99,34 +102,161 @@ func contains(a []string, b string) bool {
 //
 //////////////////////////////////////////////////////////////////////
 //
-func solve(puzzle string, squares []string) string {
+func solve(puzzle string, squares []string, peers map[string]strset, units map[string][]string) board {
    // parse_grid functionality
    vals := make(board)
-   for _,sq := range squares {
-      
+   for i := 0; i < 81; i++ {
+      vals[ squares[i] ] = "123456789"
    }
+   for i := 0; i < 81; i++ {
+      key := squares[i]
+      puz_string := puzzle[i:i + 1]
+      if puz_string != "." {
+         nvals, err := assign(vals, key, puz_string, peers, units)
+         if err != false {
+            fmt.Println("solve1")
+            panic(err)
+         } else {
+            vals = nvals
+         }
+      }
+   }
+   //
+   solved, err := search(vals, peers, units, squares)
+   if err != false {
+      fmt.Println("solve2")
+      panic(err)
+   }
+   return solved
 }
 //
 //////////////////////////////////////////////////////////////////////
 //
-func assign(values board, square string, d string) (board, bool) {
-   other_vals = strings.Replace(vals[square], d, "", -1)
-   for 
+func search(values board, peers map[string]strset, units map[string][]string, squares []string) (board, bool) {
+   if values == nil {
+      fmt.Println("here")
+      return nil, true
+   }
+   //
+   solved := true
+   for _,sq := range squares {
+      if len(values[sq]) != 1 {
+         solved = false
+      }
+   }
+   if solved {
+      return values, false
+   }
+   //
+   min := -1
+   min_sq := "none"
+   for _,sq := range squares {
+      if min == -1 || (len(values[sq]) > 1 && len(values[sq]) < min) {
+         min_sq = sq
+         min = len(values[sq])
+      }
+   }
+   for i,_ := range values[min_sq] {
+      assignment, err := assign(copyVals(values), min_sq, values[min_sq][i:i + 1], peers, units)
+      if err != false {
+         fmt.Println("search1")
+         panic(err)
+      }
+      searched, err := search(assignment, peers, units, squares)
+      if err != false {
+         fmt.Println("search2")
+         panic(err)
+      }
+      if searched != nil {
+         return searched, false
+      }
+   }
+   return nil, true
 }
 //
 //////////////////////////////////////////////////////////////////////
 //
-func display(b string) {
+func copyVals(vals board) board {
+   nvals := make(board)
+   for k,v := range vals {
+      nvals[k] = v
+   }
+   return nvals
+}
+//
+//////////////////////////////////////////////////////////////////////
+//
+func assign(values board, square string, d string, peers map[string]strset, units map[string][]string) (board, bool) {
+   other_vals := strings.Replace(values[square], d, "", -1)
+   for i := 0; i < len(other_vals); i++ {
+      vals, err := eliminate(values, square, other_vals[ i : i + 1], peers, units)
+      if err != false {
+         return nil, true
+      } else {
+         values = vals
+      }
+   }
+   return values, false
+}
+//
+//////////////////////////////////////////////////////////////////////
+//
+func eliminate(values board, sq string, d string, peers map[string]strset, units map[string][]string) (board, bool) {
+   if !strings.Contains(values[sq], d) {
+      return values, true
+   }
+   //
+   values[sq] = strings.Replace(values[sq], d, "", -1)
+   if len(values[sq]) == 0 {
+      return nil, true
+   } else if len(values[sq]) == 1 {
+      d2 := values[sq]
+      for peer,_ := range peers[sq] {
+         done, err := eliminate(values, peer, d2, peers, units)
+         if err != true {
+            return nil, true
+         }
+         values = done
+      }
+   }
+   //
+   for _,u := range units[sq] {
+      var dplaces []string
+      for i,_ := range u {
+         place := string(u[i])
+         if strings.Contains(values[place], d) {
+            dplaces = append(dplaces, place)
+         }
+      }
+      //
+      if len(dplaces) == 0 {
+         return nil, true
+      } else if len(dplaces) == 1 {
+         if new_vals, err := assign(values, dplaces[0], d, peers, units); err != true {
+            return nil, true
+         } else {
+            values = new_vals
+         }
+      }
+   }
+   //
+   return values, false
+}
+//
+//////////////////////////////////////////////////////////////////////
+//
+func display(b board, squares []string) {
    var s string = ""
    for i := 0; i < 81; i++ {
-      s += b[i] + " "
-      if i == 3 or i == 6 {
+      s += b[ squares[i] ] + " "
+      if i % 3 == 0 {
          s += "| "
       }
-      if i == 9{
+      if i % 9 == 0 {
          s += "\n---------------------------------\n"
       }
    }
+   fmt.Println(s)
 }
 //
 // End of file
