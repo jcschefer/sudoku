@@ -1,11 +1,12 @@
 package main
 //
 import (
+   "bufio"
+   "errors"
    "fmt"
    "os"
-   "bufio"
-   "time"
    "strings"
+   "time"
 )
 //
 type strset map[string]bool
@@ -113,7 +114,7 @@ func solve(puzzle string, squares []string, peers map[string]strset, units map[s
       puz_string := puzzle[i:i + 1]
       if puz_string != "." {
          nvals, err := assign(vals, key, puz_string, peers, units)
-         if err != false {
+         if err != nil {
             fmt.Println("solve1")
             panic(err)
          } else {
@@ -123,7 +124,7 @@ func solve(puzzle string, squares []string, peers map[string]strset, units map[s
    }
    //
    solved, err := search(vals, peers, units, squares)
-   if err != false {
+   if err != nil {
       fmt.Println("solve2")
       panic(err)
    }
@@ -132,10 +133,10 @@ func solve(puzzle string, squares []string, peers map[string]strset, units map[s
 //
 //////////////////////////////////////////////////////////////////////
 //
-func search(values board, peers map[string]strset, units map[string][]string, squares []string) (board, bool) {
+func search(values board, peers map[string]strset, units map[string][]string, squares []string) (board, error) {
    if values == nil {
       fmt.Println("here")
-      return nil, true
+      return nil, errors.New("function search: values undefined")
    }
    //
    solved := true
@@ -145,7 +146,7 @@ func search(values board, peers map[string]strset, units map[string][]string, sq
       }
    }
    if solved {
-      return values, false
+      return values, nil
    }
    //
    min := -1
@@ -158,20 +159,20 @@ func search(values board, peers map[string]strset, units map[string][]string, sq
    }
    for i,_ := range values[min_sq] {
       assignment, err := assign(copyVals(values), min_sq, values[min_sq][i:i + 1], peers, units)
-      if err != false {
+      if err != nil {
          fmt.Println("search1")
          panic(err)
       }
       searched, err := search(assignment, peers, units, squares)
-      if err != false {
+      if err != nil {
          fmt.Println("search2")
          panic(err)
       }
       if searched != nil {
-         return searched, false
+         return searched, nil
       }
    }
-   return nil, true
+   return nil, errors.New("function search: ended with no solution")
 }
 //
 //////////////////////////////////////////////////////////////////////
@@ -186,35 +187,37 @@ func copyVals(vals board) board {
 //
 //////////////////////////////////////////////////////////////////////
 //
-func assign(values board, square string, d string, peers map[string]strset, units map[string][]string) (board, bool) {
+func assign(values board, square string, d string, peers map[string]strset, units map[string][]string) (board, error) {
    other_vals := strings.Replace(values[square], d, "", -1)
    for i := 0; i < len(other_vals); i++ {
       vals, err := eliminate(values, square, other_vals[ i : i + 1], peers, units)
-      if err != false {
-         return nil, true
+      if err != nil {
+         fmt.Printf("call to eliminate:\n*** %v\n\n%s\n\n%v\n\n%v\n\n%v\n\n", values, square, other_vals[i:i+1], peers, units)
+         return nil, errors.New("function assign: elimination failed")
       } else {
          values = vals
       }
    }
-   return values, false
+   return values, nil
 }
 //
 //////////////////////////////////////////////////////////////////////
 //
-func eliminate(values board, sq string, d string, peers map[string]strset, units map[string][]string) (board, bool) {
+func eliminate(values board, sq string, d string, peers map[string]strset, units map[string][]string) (board, error) {
    if !strings.Contains(values[sq], d) {
-      return values, true
+      return values, nil
    }
    //
    values[sq] = strings.Replace(values[sq], d, "", -1)
    if len(values[sq]) == 0 {
-      return nil, true
+      return nil, errors.New("function eliminate: lenght of values[sq] == 0")
    } else if len(values[sq]) == 1 {
       d2 := values[sq]
       for peer,_ := range peers[sq] {
          done, err := eliminate(values, peer, d2, peers, units)
-         if err != true {
-            return nil, true
+         if err != nil {
+            fmt.Println("debug flag 1")
+            return nil, errors.New("function eliminate: previous eliminate failed")
          }
          values = done
       }
@@ -230,17 +233,19 @@ func eliminate(values board, sq string, d string, peers map[string]strset, units
       }
       //
       if len(dplaces) == 0 {
-         return nil, true
+         fmt.Println("debug flat 2")
+         return nil, errors.New("function eliminate: length of dplaces is 0")
       } else if len(dplaces) == 1 {
-         if new_vals, err := assign(values, dplaces[0], d, peers, units); err != true {
-            return nil, true
+         if new_vals, err := assign(values, dplaces[0], d, peers, units); err != nil {
+            fmt.Println("debug flag 3")
+            return nil, errors.New("function eliminate: assignment failed")
          } else {
             values = new_vals
          }
       }
    }
    //
-   return values, false
+   return values, nil
 }
 //
 //////////////////////////////////////////////////////////////////////
